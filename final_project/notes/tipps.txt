@@ -1,0 +1,32 @@
+########################
+#                      #
+#    IMPLEMENTATION    #
+#                      #
+########################
+
+class OBEpot: provides a method for the partial wave representation of the OBE potential
+- No major modifications necessary
+
+class TwoBody:
+- No major modifications necessary
+
+class TwoBodyTMat: class defines the off-shell t-matrix for a three-body bound state. It also contains the initialization of grid points for the three-body problem.
+- Introduce lmax=6, j12max=5
+- Prepare bookkeeping for two-nucleon systems, J12max
+- Calculate partial wave channels
+- set up V under consideration of s12, s12p, j12, j12p, t12, t12p
+- prep_tmat(self,E): calculate the t-matrix for a given three-body energy under consideration l12, s12, j12; determine the indices of states that couples to alpha12 and do the summation over alpha12
+
+class Cubherm: prepares spline functions)
+- No major modifications necessary
+
+class ThreeBody: provides routines for the implementation of the permutation operator
+- consider j12max: maximal two-body angular momentum to be taken into account
+- consider l3max: maximal orbital angular momentum
+- prepare partial wave channels for total angular momentum j3 -> cf. corresponding part in the existing code (lecture 9). This time, also take e.g. j3, l3, I3, l12, tau3, alphaNN into account.
+- def _prep_perm(self): prepares and returns an array for the application of the permutation operator.
+	* the array is based on G_{alpha,alphap}(q,qp,x) and is combined to be directly applicable to be summed  with tmatrix
+	* prepare spherical harmonics properly
+	* again, take l12, j3 etc. into account
+	* set spline elements based on grid points and shifted momenta (cf. existing code), this time also take e.g. S12, j12, I3, j3, t12, tau3 and the primed versions into account
+		--> use wigner_9j() and wigner_6j() function
