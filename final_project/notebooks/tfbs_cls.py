@@ -179,7 +179,7 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
                             mass=938.92,lmax=0, l3max=0, bj=0.5,
                             nr1=20, nr2=10, ra=1.0, rb=5.0, rc=20.0, 
                             nrho1=20, nrho2=10, rhoa=1.0, rhob=5.0, rhoc=20.0, 
-                            np1four=200,np2four=100):     
+                            np1four=200,np2four=100,verbose=False):     
         """Initializes the permutation operator for the three-body calculation and prepares application of Faddeev kernel.
         
            Parameters: 
@@ -245,6 +245,9 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         self.bj = bj
         self.blmax = int(bj-0.5)
         self.bsmax = bj
+
+        # control parameters
+        self.verbose = verbose
         
         
         # now construct pertial wave channels, including:
@@ -279,7 +282,8 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
 
         self.nalpha=len(self.qnalpha)
         end = timeit.default_timer()
-        print("Duration of alpha list construction: ", end-start)
+        if self.verbose:
+          print("Duration of alpha list construction: ", end-start)
 
         
 
@@ -294,14 +298,20 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         self.timespl=0
         self.timepmat=0
         
+        
         self.gpreptime=-timeit.default_timer()        
         # this prepares the G function and splines to be used for the preparation of the 
         # kernel later (pmat = permutation matrix)
         self.pmat=self._prep_perm()
         self.gpreptime+=timeit.default_timer()
 
+        if self.verbose:
+          print("Permutation matrix element computation complete. Time={0:.4e}".format(self.gpreptime))
+
+
         self.fadpreptime=0
         self.fadsolvetime=0
+        self.numiter=0
 
         
     def _angle(self,px,py,pz):
@@ -531,45 +541,6 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         self.timegcalc+=timeit.default_timer()
         #  now we assume that there is a function on p on the left defined by p**l and on the right devided by p'**l' 
         # that is interpolated using Cubherm to pi and pip 
-        
-        # # set spline elements based on grid points and shifted momenta 
-        # splpi=Cubherm.spl(self.pgrid,pi)
-        # splpip=Cubherm.spl(self.pgrid,pip)
-        
-        # # interpolation fspl=np.sum(spl*fold,axis=1) first axis is pgrid 
-        # # prepare splines multiplied by p**l factors (splalpha also includes the integration weights for q' and x integral)
-        
-        # splalpha=np.empty((self.npoints*self.nqpoints*self.nalpha,self.nqpoints,self.nx),dtype=np.double)
-        # splalphap=np.empty((self.npoints*self.nqpoints*self.nalpha,self.nqpoints,self.nx),dtype=np.double)
-        
-        # for qnset in self.qnalpha:  # go through allowed l,lam combinations
-        #   alpha=qnset["alpha"]
-        #   l=qnset["l"]
-        #   for ip in range(self.npoints): 
-        #    for iq in range(self.nqpoints):
-        #      indxpmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
-        #      #for jq in range(self.nqpoints):
-        #      #   splalpha[indxpmat,jq,:]=splpi[ip,iq,jq,:]*(pi[iq,jq,:]/self.pgrid[ip])**l*self.xw[:]*self.qweight[jq]*self.qgrid[jq]**2
-        #      #   splalphap[indxpmat,jq,:]=splpip[ip,jq,iq,:]*(pip[jq,iq,:]/self.pgrid[ip])**l
-        #      splalpha[indxpmat,:,:]=np.einsum("ij,j,i->ij",splpi[ip,iq,:,:]*(pi[iq,:,:]/self.pgrid[ip])**l,self.xw[:],self.qweight[:]*self.qgrid[:]**2)
-        #      splalphap[indxpmat,:,:]=splpip[ip,:,iq,:]*(pip[:,iq,:]/self.pgrid[ip])**l
-            
-        
-        # pmat=np.empty((self.npoints*self.nqpoints*self.nalpha,self.npoints*self.nqpoints*self.nalpha),dtype=np.double)
-
-        # for qnset in self.qnalpha:  # go through allowed l,lam combinations
-        #   alpha=qnset["alpha"]
-        #   for qnsetp in self.qnalpha:  # go through allowed l,lam combinations
-        #     alphap=qnsetp["alpha"]
-        #     for ip in range(self.npoints): 
-        #      for iq in range(self.nqpoints):
-        #       indxpmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
-        #       for jp in range(self.npoints): 
-        #        for jq in range(self.nqpoints):
-        #         indxpmatp=self.npoints*self.nqpoints*alphap+self.npoints*jq+jp
-        #         pmat[indxpmat,indxpmatp]=np.sum(splalpha[indxpmat,jq,:]
-        #                       *gfunc[alpha,alphap,iq,jq,:]
-        #                       *splalphap[indxpmatp,iq,:]) 
         #
         # set spline elements based on grid points and shifted momenta 
         self.timespl-=timeit.default_timer()
@@ -643,6 +614,8 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
  
         # get tmatrix for given energy
         self.tmat=self.prep_tmat(ener)
+        if self.verbose:
+          print("tmatrix element computation complete. Time={0:.4e}".format(self.tmattime))
         
         self.fadpreptime-=timeit.default_timer()
         
@@ -675,6 +648,9 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
               self.kfadmat[indxkmat,:]*=G0[iq,ip]  
 
         self.fadpreptime+=timeit.default_timer()
+
+        if self.verbose:
+          print("Faddeev element computation complete. Time={0:.4e}".format(self.fadpreptime))
 
 # set up set of equations and calculate eigenvalues 
 
@@ -728,6 +704,8 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
       fadcomp=(1/np.sqrt(norm))*fadcomp
     
       self.fadsolvetime+=timeit.default_timer()
+      if self.verbose:
+          print("Faddeev component computation complete. Time={0:.4e}".format(self.fadsolvetime))
       return eigv,fadcomp
                 
     def esearch(self,neigv=1,e1=-0.05,e2=-0.06,elow=-0.02,tol=1e-8,nitermax=20):
@@ -769,7 +747,8 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
 
         end=timeit.default_timer()
 
-        print("time for energy search: ", end-start)
+        if self.verbose:
+          print("Energy search computation complete. Time={0:.4e}".format(end-start))
             
         return e1,eta1,fadcomp 
 
