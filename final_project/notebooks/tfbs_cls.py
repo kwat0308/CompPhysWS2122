@@ -110,8 +110,9 @@ class TwoBodyTMatFerm(TwoBody):
         m=0
         for l in range(self.lmax+1):
           for s in range(self.smax+1):
-            for j in range(self.smax+1):
-              for t in range(self.tmax+1):
+#             for j in range(self.jmax+1):
+            j = l + s
+            for t in range(self.tmax+1):
                 self.alpha_list.append({"m":m, "l":l, "s":s, "j":j, "t":t})
                 m+=1
 
@@ -505,14 +506,23 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
 
                   # not sure how this prime stuff works here
                   alphap=qnsetp["alpha"]
-                  sp = s
-                  jp = j
-                  j3p = j3
-                  tp=t
+                  lp = qnsetp["l"]
+                  lamp = qnsetp["lam"]
+                  sp = qnsetp["s"]
+                  s3p = s3
+                  jp = qnsetp["j"]
+                  j3p = qnsetp["j3"]
+                  tp= qnsetp["t"]
+                  t3 = qnsetp["t3"]
+                
+#                   if (j3 == j3p and t3 == t3p):
 
                   # evaluate wigner 9j symbol
                   c9j = float(Wigner9j(l, s, j, lam, s3, j3, bl, bs, bj).doit())
-                  c9jp = float(Wigner9j(l, sp, jp, lam, s3, j3p, bl, bs, bj).doit())
+                  c9jp = float(Wigner9j(lp, sp, jp, lamp, s3, j3p, bl, bs, bj).doit())
+
+                    # evaluate coefficients before that 
+                  coeff = (2*bs + 1) * np.sqrt((2*j+1) * (2*jp+1) * (2*j3+1) + (2*j3p + 1))
 
                   # evaluate spin component -> Wigner 6j symnbols
                   c6j_s = float(Wigner6j(s3, 0.5, sp, s3, bs, s).doit())
@@ -522,14 +532,13 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
                   c6j_t = float(Wigner6j(t3, 0.5, tp, t3, bt, t).doit())
                   isospin_part = (-1)**t * np.sqrt((2*t + 1) * (2*tp + 1)) * c6j_t
 
-                  # evaluate coefficients before that 
-                  coeff = (2*bs + 1) * np.sqrt((2*j+1) * (2*jp+1) * (2*j3+1) + (2*j3p + 1))
+                  
 
                   for bm in range(-bl,bl+1):
                       if(abs(bm)<=l):  
                           lmindx=self._lmindx(l,bm) 
                           orbital_part = 8*m.pi**2*np.sqrt((2*lam+1)/(4*m.pi))/(2*bl+1) \
-                              *ystarl[lmindx,s,j,t,:,:,:]*ylylam[alphap,bm+bl,:,:,:]
+                              *ystarl[lmindx,s,j,t,:,:,:]*ylylam[alphap,bm+bl,:,:,:]*cg[alphap,bm+bl]
           #                 print(bm+bl)
           #                 print(np.nonzero(ylylam[alphap,bm+bl,:,:,:]))
 
@@ -737,8 +746,9 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
           eta2=eta1
           e1=enew
           eta1=eta 
-
-        #   print(e1, e2, eta)
+            
+          if self.verbose:
+              print("e1, e2, eta: ", e1, e2, eta)
 
           # break if loop is taking too long
           niter+=1
@@ -855,13 +865,48 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
       fadcomp=fadcomp.reshape((self.nalpha*self.nqpoints*self.npoints))   
 
       # now perform summation over one index
-      wf = np.einsum("ij,j->i", idmat + alpha * self.pmat, fadcomp)
+      for qnset in self.qnalpha:  # go through allowed l,lam combinations
+        alpha=qnset["alpha"]
+        for qnsetp in self.qnalpha:  # go through allowed l,lam combinations
+          alphap=qnsetp["alpha"]
+          for ip in range(self.npoints): 
+            for iq in range(self.nqpoints):
+              indxidmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
+            
+              wf[indxidmat] = np.dot((idmat[indxidmat,:] + alpha*self.pmat[indxidmat,:]), fadcomp)
+#       wf = np.einsum("ij,j->i", idmat + alpha * self.pmat, fadcomp)
       print(wf.shape)
 
       wf = wf.reshape((self.nalpha,self.nqpoints,self.npoints))
 
       return wf
-
+    
+#     def wavefunc(self, fadcomp):
+#         '''Wavefunction evaluated from Faddeev component'''
+        
+    
+    def eval_ekin(self, fadout, wf):
+        '''
+        Evaluate the kinetic energy using the Faddeev component and the 
+        wave function, i.e. <T> = <Psi|H0|Psi> = 3*< fad | H0 | Psi>
+        '''
+        
+        Tmat = np.zeros((self.nqpoints, self.npoints), dtype=np.double)
+        for iq in range(self.nqpoints):
+            for ip in range(self.npoints):
+                # multiply the grid points and the momentum values here
+                Tval_1 = 0.75 * self.qgrid[iq]**2. / self.mass 
+                Tval_2 = self.pgrid[ip]**2. / self.mass
+                pint = self.pgrid[ip]**2. * self.pweight[ip]
+                qint = self.qgrid[iq]**2. * self.qweight[iq]
+                Tmat[iq, ip] = qint * pint * (Tval_1 + Tval_2)
+                
+        # now evaluate the expectation value
+        # this means the sum
+        # multiply by 3 due to normalization
+        h0 = 3 * np.sum(wf * Tmat * fadout)
+        
+        return h0
 # set up set of equations and calculate eigenvalues iteratively 
 
     def eigv_iter(self,E,neigv, maxiter=10, eigtol=1e-6):
@@ -885,15 +930,15 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         psistart=(1/np.sqrt(norm))*psistart
         
         # define array for basis vectors, first one is start vector 
-        psiv=np.empty((self.maxiter+1,self.nalpha,self.nqpoints,self.npoints),dtype=np.double)
+        psiv=np.empty((maxiter+1,self.nalpha,self.nqpoints,self.npoints),dtype=np.double)
         psiv[0,:,:,:]=psistart[:,:,:]
         
         # define array for < v_i | K | v_j > 
-        bmat=np.zeros((self.maxiter+1,self.maxiter+1),dtype=np.double)
+        bmat=np.zeros((maxiter+1,maxiter+1),dtype=np.double)
         # for comparison to check convergence 
         lasteta=0.0   
         
-        for n in range(self.maxiter):  # start iteration 
+        for n in range(maxiter):  # start iteration 
           # apply kernel   
           psiw=self.faddeev(psiv[n,:,:,:])
           # count iterations for stastics 
@@ -931,7 +976,7 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
           # and take the next one 
           maxpos=np.argmax(evalue)
           eigv=evalue[maxpos]
-          if (np.abs(lasteta-eigv)<self.eigtol): # converged, stop iteration 
+          if (np.abs(lasteta-eigv)<eigtol): # converged, stop iteration 
             break 
             
           lasteta=eigv   

@@ -1137,6 +1137,29 @@ class ThreeBody(TwoBodyTMat):
       wf = wf.reshape((self.nalpha,self.nqpoints,self.npoints))
 
       return wf
+
+    def eval_ekin(self, fadout, wf):
+        '''
+        Evaluate the kinetic energy using the Faddeev component and the 
+        wave function, i.e. <T> = <Psi|H0|Psi> = 3*< fad | H0 | Psi>
+        '''
+        
+        Tmat = np.zeros((self.nqpoints, self.npoints), dtype=np.double)
+        for iq in range(self.nqpoints):
+            for ip in range(self.npoints):
+                # multiply the grid points and the momentum values here
+                Tval_1 = 0.75 * self.qgrid[iq]**2. / self.mass 
+                Tval_2 = self.pgrid[ip]**2. / self.mass
+                pint = self.pgrid[ip]**2. * self.pweight[ip]
+                qint = self.qgrid[iq]**2. * self.qweight[iq]
+                Tmat[iq, ip] = qint * pint * (Tval_1 + Tval_2)
+                
+        # now evaluate the expectation value
+        # this means the sum
+        # multiply by 3 due to normalization
+        h0 = 3 * np.sum(wf * Tmat * fadout)
+        
+        return h0
     
     # application of the Faddeev kernel for the iterative solver 
     
