@@ -1005,7 +1005,7 @@ class ThreeBody(TwoBodyTMat):
         niter=0
         
         # start = timeit.default_timer()
-        while abs(e1-e2/e1) > tol: 
+        while abs(e1-e2) > tol: 
           # get new estimate (taking upper value into account)   
           enew=e2+(e1-e2)/(eta1-eta2)*(1-eta2) 
           enew=min(elow,enew)

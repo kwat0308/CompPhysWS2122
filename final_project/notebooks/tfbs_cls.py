@@ -561,6 +561,8 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         
         splalpha=np.empty((self.nalpha,self.nqpoints,self.npoints,self.nqpoints,self.nx),dtype=np.double)
         splalphap=np.empty((self.nalpha,self.nqpoints,self.npoints,self.nqpoints,self.nx),dtype=np.double)
+        # splalpha=np.empty((self.npoints*self.nqpoints*self.nalpha,self.nqpoints,self.nx),dtype=np.double)
+        # splalphap=np.empty((self.npoints*self.nqpoints*self.nalpha,self.nqpoints,self.nx),dtype=np.double)
         
         for qnset in self.qnalpha:  # go through allowed l,lam combinations
           alpha=qnset["alpha"]
@@ -570,19 +572,19 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
           splalpha[alpha,:,:,:,:]=np.einsum("jikl,ikl,j,l,k->ijkl",splpi,pi**l,1.0/self.pgrid**l,self.xw,self.qweight*self.qgrid**2)
           splalphap[alpha,:,:,:,:]=np.einsum("jkil,kil,j->ijkl",splpip,pip**l,1.0/self.pgrid**l)
         
-#          for ip in range(self.npoints): 
-#           for iq in range(self.nqpoints):
-#             indxpmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
-             #for jq in range(self.nqpoints):
-             #   splalpha[indxpmat,jq,:]=splpi[ip,iq,jq,:]*(pi[iq,jq,:]/self.pgrid[ip])**l*self.xw[:]*self.qweight[jq]*self.qgrid[jq]**2
-             #   splalphap[indxpmat,jq,:]=splpip[ip,jq,iq,:]*(pip[jq,iq,:]/self.pgrid[ip])**l
-#             splalpha[indxpmat,:,:]=np.einsum("ij,j,i->ij",splpi[ip,iq,:,:]*(pi[iq,:,:]/self.pgrid[ip])**l,self.xw[:],self.qweight[:]*self.qgrid[:]**2)
-#             splalphap[indxpmat,:,:]=splpip[ip,:,iq,:]*(pip[:,iq,:]/self.pgrid[ip])**l
+          # for ip in range(self.npoints): 
+          #   for iq in range(self.nqpoints):
+          #     indxpmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
+          #     # for jq in range(self.nqpoints):
+          #     #   splalpha[indxpmat,jq,:]=splpi[ip,iq,jq,:]*(pi[iq,jq,:]/self.pgrid[ip])**l*self.xw[:]*self.qweight[jq]*self.qgrid[jq]**2
+          #     #   splalphap[indxpmat,jq,:]=splpip[ip,jq,iq,:]*(pip[jq,iq,:]/self.pgrid[ip])**l
+          #     splalpha[indxpmat,:,:]=np.einsum("ij,j,i->ij",splpi[ip,iq,:,:]*(pi[iq,:,:]/self.pgrid[ip])**l,self.xw[:],self.qweight[:]*self.qgrid[:]**2)
+          #     splalphap[indxpmat,:,:]=splpip[ip,:,iq,:]*(pip[:,iq,:]/self.pgrid[ip])**l
         self.timespl+=timeit.default_timer()
             
         
         self.timepmat-=timeit.default_timer()
-        #pmat=np.zeros((self.npoints*self.nqpoints*self.nalpha,self.npoints*self.nqpoints*self.nalpha),dtype=np.double)
+        pmat=np.zeros((self.npoints*self.nqpoints*self.nalpha,self.npoints*self.nqpoints*self.nalpha),dtype=np.double)
         
         # also generate views with separated indices 
         #pmatsingle=pmat.reshape((self.nalpha,self.nqpoints,self.npoints,self.nalpha,self.nqpoints,self.npoints))
@@ -594,22 +596,22 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         # lmn : alphap jq jp (indxpmatp)
         # o   : ix 
         
-        pmatsingle=np.einsum("ijkmo,iljmo,lmnjo->ijklmn",splalpha,gfunc,splalphap)
-        pmat=pmatsingle.reshape((self.npoints*self.nqpoints*self.nalpha,self.npoints*self.nqpoints*self.nalpha))
+        pmat=np.einsum("ijkmo,iljmo,lmnjo->ijklmn",splalpha,gfunc,splalphap).reshape((self.npoints*self.nqpoints*self.nalpha,self.npoints*self.nqpoints*self.nalpha))
+        # pmat=pmatsingle.reshape((self.npoints*self.nqpoints*self.nalpha,self.npoints*self.nqpoints*self.nalpha))
         
-#        for qnset in self.qnalpha:  # go through allowed l,lam combinations
-#          alpha=qnset["alpha"]
-#          for qnsetp in self.qnalpha:  # go through allowed l,lam combinations
-#            alphap=qnsetp["alpha"]
-#            for ip in range(self.npoints): 
-#             for iq in range(self.nqpoints):
-#              indxpmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
-#              for jp in range(self.npoints): 
-#               for jq in range(self.nqpoints):
-#                indxpmatp=self.npoints*self.nqpoints*alphap+self.npoints*jq+jp
-#                pmat[indxpmat,indxpmatp]=np.sum(splalpha[indxpmat,jq,:]
-#                              *gfunc[alpha,alphap,iq,jq,:]
-#                              *splalphap[indxpmatp,iq,:])                   
+        # for qnset in self.qnalpha:  # go through allowed l,lam combinations
+        #   alpha=qnset["alpha"]
+        #   for qnsetp in self.qnalpha:  # go through allowed l,lam combinations
+        #     alphap=qnsetp["alpha"]
+        #     for ip in range(self.npoints): 
+        #       for iq in range(self.nqpoints):
+        #         indxpmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
+        #         for jp in range(self.npoints): 
+        #           for jq in range(self.nqpoints):
+        #             indxpmatp=self.npoints*self.nqpoints*alphap+self.npoints*jq+jp
+        #             pmat[indxpmat,indxpmatp]=np.sum(splalpha[indxpmat,jq,:]
+        #                           *gfunc[alpha,alphap,iq,jq,:]
+        #                           *splalphap[indxpmatp,iq,:])                   
         self.timepmat+=timeit.default_timer()                  
                                       
         return pmat
@@ -735,7 +737,7 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         niter=0
         
         start = timeit.default_timer()
-        while abs(e1-e2/e1) > tol: 
+        while abs(e1-e2) > tol: 
           # get new estimate (taking upper value into account)   
           enew=e2+(e1-e2)/(eta1-eta2)*(1-eta2) 
           enew=min(elow,enew)
