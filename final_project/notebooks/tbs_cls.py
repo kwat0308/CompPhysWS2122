@@ -100,7 +100,7 @@ class TwoBody:
     
     def __init__(self, pot, np1=20, np2=10, pa=1.0, pb=5.0, pc=20.0, mred=938.92/2,l=0,
                             nr1=20, nr2=10, ra=1.0, rb=5.0, rc=20.0, 
-                            np1four=200,np2four=100):
+                            np1four=200,np2four=100, spinpot=False):
         """Initialization of two-body solver. 
         
            The initialization defines the momentum grids and the interaction and partial wave to be used. 
@@ -162,10 +162,11 @@ class TwoBody:
         self.pot=pot
         
         # and actual potential matrix elements 
-        self.vmat=np.empty((self.npoints,self.npoints),dtype=np.double)
-        for i in range(self.npoints):
-          for j in range(self.npoints): 
-            self.vmat[i,j]=self.pot.v(self.pgrid[i],self.pgrid[j],self.l)
+        if not spinpot:
+          self.vmat=np.empty((self.npoints,self.npoints),dtype=np.double)
+          for i in range(self.npoints):
+            for j in range(self.npoints): 
+              self.vmat[i,j]=self.pot.v(self.pgrid[i],self.pgrid[j],self.l)
 
         self.preptime+=timeit.default_timer() 
     
