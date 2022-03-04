@@ -34,7 +34,7 @@ class TwoBodyTMatFerm(TwoBody):
                             mass=938.92,lmax=0,bj=0.5,
                             nr1=20, nr2=10, ra=1.0, rb=5.0, rc=20.0, 
                             nrho1=20, nrho2=10, rhoa=1.0, rhob=5.0, rhoc=20.0, 
-                            np1four=200,np2four=100):
+                            np1four=200,np2four=100, spinpot=False):
         """Initialization of grid points and interaction for the solution of the three-body problem. 
         
            Parameter: 
@@ -71,7 +71,7 @@ class TwoBodyTMatFerm(TwoBody):
         
         
         # first use the TwoBody class to keep the main parameters 
-        super().__init__(pot,np1,np2,pa,pb,pc,mass/2,0,nr1,nr2,ra,rb,rc,np1four,np2four)
+        super().__init__(pot,np1,np2,pa,pb,pc,mass/2,0,nr1,nr2,ra,rb,rc,np1four,np2four, spinpot)
 
         self.nq1 = nq1
         self.nq2 = nq2
@@ -129,12 +129,12 @@ class TwoBodyTMatFerm(TwoBody):
         self.vmatpw=np.empty((self.npoints,self.npoints,self.nalpha2N),dtype=np.double)
         for m, alpha in enumerate(self.alpha_list):
           l = alpha["l"]
+          s = alpha["s"]
+          j = alpha["j"]
+          t = alpha["t"]
           for i in range(self.npoints):
               for k in range(self.npoints):
-                  if l==0:
-                    self.vmatpw[i,k,m]=self.vmat[i,k]  
-                  else:    
-                    self.vmatpw[i,k,m]=self.pot.v(self.pgrid[i],self.pgrid[k],l)
+                self.vmatpw[i,k,m]=self.pot.v(self.pgrid[i],self.pgrid[k],l,s,j,t)
         
         self.tmattime=0.0
         
@@ -189,7 +189,7 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
                             mass=938.92,lmax=0, l3max=0, bj=0.5,
                             nr1=20, nr2=10, ra=1.0, rb=5.0, rc=20.0, 
                             nrho1=20, nrho2=10, rhoa=1.0, rhob=5.0, rhoc=20.0, 
-                            np1four=200,np2four=100,verbose=False):     
+                            np1four=200,np2four=100,verbose=False,spinpot=False):     
         """Initializes the permutation operator for the three-body calculation and prepares application of Faddeev kernel.
         
            Parameters: 
@@ -229,13 +229,15 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
            jmax  --- maxilamal two-body total angular momentum
            l3max -- maximal one-body orbital angular momentum
            bs  -- total spin S, always set to 1.5
+
+           spinpot -- flag to enable spin-dependent potential
         """
         
         # first initialize the tmatrix class (do not calc the tmatrix yet)
         super().__init__(pot,np1,np2,pa,pb,pc,nq1,nq2,qa,qb,qc,
                          mass,lmax,bj,
                          nr1,nr2,ra,rb,rc,nrho1,nrho2,rhoa,rhob,rhoc,
-                         np1four,np2four)
+                         np1four,np2four,spinpot)
         
         # prepare angular grid points for the permutation operator 
         self.nx=nx
@@ -988,10 +990,10 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         # now evaluate the expectation value
         # this means the sum
         # multiply by 3 due to normalization
-        h0_fad = 3 * np.sum(wf * Tmat * fadout)
+        # h0_fad = 3 * np.sum(wf * Tmat * fadout)
         h0 = np.sum(wf**2*Tmat)
         
-        return h0, h0_fad
+        return h0
 
 
 
@@ -1100,10 +1102,8 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         for qnset in self.qnalpha:
           l=qnset["l"] 
           alpha=qnset["alpha"]
-          psiout[alpha,:,:]=np.einsum("ijk,ik->ij",self.tmat[l,:,:,:],psitmp[alpha,:,:])  
-          #for iq in range(self.nqpoints):
-          #  for ip in range(self.npoints):
-          #    psiout[alpha,iq,ip]=np.sum(self.tmat[l,iq,ip,:]*psitmp[alpha,iq,:])
+          alpha12 = qnset["alpha_12"]
+          psiout[alpha,:,:]=np.einsum("ijk,ik->ij",self.tmat[alpha12,:,:,:],psitmp[alpha,:,:])  
         
         # now multiply with G0        
         for alpha in range(self.nalpha):
