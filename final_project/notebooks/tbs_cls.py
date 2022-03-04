@@ -1136,6 +1136,9 @@ class ThreeBody(TwoBodyTMat):
 
       wf = wf.reshape((self.nalpha,self.nqpoints,self.npoints))
 
+      # normalize the wavefunction
+      wf = (1 / np.sqrt(self.skalp(wf, wf))) * wf
+
       return wf
 
     def eval_ekin(self, fadout, wf):

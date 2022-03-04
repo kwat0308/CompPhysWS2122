@@ -31,7 +31,7 @@ class TwoBodyTMatFerm(TwoBody):
     
     def __init__(self, pot, np1=20, np2=10, pa=1.0, pb=5.0, pc=20.0, 
                             nq1=20, nq2=10, qa=1.0, qb=5.0, qc=20.0, 
-                            mass=938.92,lmax=0,
+                            mass=938.92,lmax=0,bj=0.5,
                             nr1=20, nr2=10, ra=1.0, rb=5.0, rc=20.0, 
                             nrho1=20, nrho2=10, rhoa=1.0, rhob=5.0, rhoc=20.0, 
                             np1four=200,np2four=100):
@@ -85,6 +85,7 @@ class TwoBodyTMatFerm(TwoBody):
         self.jmax = lmax + self.smax
         # self.jmax = jmax
         # self.smax= jmax - lmax
+        self.bj=bj
         self.tmax = 1
 
         self.nrho1 = nrho1
@@ -112,13 +113,20 @@ class TwoBodyTMatFerm(TwoBody):
           for s in range(self.smax+1):
 #             for j in range(self.jmax+1):
             j = l + s
-            for t in range(self.tmax+1):
-                self.alpha_list.append({"m":m, "l":l, "s":s, "j":j, "t":t})
-                m+=1
+            if j < bj:
+              for t in range(self.tmax+1):
+                  self.alpha_list.append({"m":m, "l":l, "s":s, "j":j, "t":t})
+                  m+=1
 
-        self.nalpha = len(self.alpha_list)
+        print("off-shell matrix quantum numbers:")
+        print("{0}  {1}  {2}  {3}  {4}".format(*list(self.alpha_list[0].keys())))
+
+        for alpha_dict in self.alpha_list:
+          print("{0}  {1}  {2}  {3}  {4}".format(*list(alpha_dict.values())))
+
+        self.nalpha2N = len(self.alpha_list)
         # and prepare actual potential matrix elements for all angular momenta
-        self.vmatpw=np.empty((self.npoints,self.npoints,self.nalpha),dtype=np.double)
+        self.vmatpw=np.empty((self.npoints,self.npoints,self.nalpha2N),dtype=np.double)
         for m, alpha in enumerate(self.alpha_list):
           l = alpha["l"]
           for i in range(self.npoints):
@@ -141,9 +149,10 @@ class TwoBodyTMatFerm(TwoBody):
       etmat=E-0.75*self.qgrid**2/self.mass   # note that this is a negative energy < E_b(two-body) 
              
       # prepare numpy array that keeps all tmatrix elements 
-      tmat=np.empty((self.nalpha,self.nqpoints,self.npoints,self.npoints),dtype=np.double)
-      
+      tmat=np.empty((self.nalpha2N,self.nqpoints,self.npoints,self.npoints),dtype=np.double)
+      # print(tmat.shape)
       for m, _ in enumerate(self.alpha_list):
+        # print(m)
 
         for ie in range(self.nqpoints):
           # to deal with delta function
@@ -224,7 +233,7 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         
         # first initialize the tmatrix class (do not calc the tmatrix yet)
         super().__init__(pot,np1,np2,pa,pb,pc,nq1,nq2,qa,qb,qc,
-                         mass,lmax,
+                         mass,lmax,bj,
                          nr1,nr2,ra,rb,rc,nrho1,nrho2,rhoa,rhob,rhoc,
                          np1four,np2four)
         
@@ -244,8 +253,9 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         # total parameters
         self.j3max = self.lammax + self.s3
         self.bj = bj
-        self.blmax = int(bj-0.5)
-        self.bsmax = bj
+        self.bjmax = self.jmax + self.j3max
+        self.blmax = int(self.bjmax-0.5)
+        self.bsmax = self.bj
 
         # control parameters
         self.verbose = verbose
@@ -255,24 +265,34 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         # l, l3, bl, s, s3, bs, j, j3, bj, t, t3, bt
         self.qnalpha=[]
         alpha=0
+        alpha_12 = 0
 
         start = timeit.default_timer()
 
         for l in range(lmax+1):
             for s in range(self.smax+1):
-                for j in range(self.jmax+1):
-                  for t in range(self.tmax+1):
-                    if(l%2==0):   # take only symmetric pw (Pauli)  
-                      # for lam in range(abs(l-bl),l+bl+1):
-                      for lam in range(self.lammax+1):
-                        for j3 in np.arange(abs(j-self.bj),j+self.bj+1):
-                          self.qnalpha.append({"alpha":alpha, 
-                                                "l":l,"lam":lam,
-                                                "s":s, "s3":self.s3,
-                                                "j":j, "j3":j3, "bj":self.bj,
-                                                "t":t, "t3":self.t3, "bt":1.5
-                                              })
-                          alpha+=1
+              j = l + s
+              for t in range(self.tmax+1):
+                
+                # if(l%2==0):   # take only symmetric pw (Pauli)  
+                # for lam in range(abs(l-bl),l+bl+1):
+                for lam in range(self.lammax+1):
+                  # for j3 in np.arange(abs(j-self.bj),j+self.bj+1):
+                  for j3 in np.arange(0.5, self.j3max+1, 1):
+                    bl = l + lam
+                    bs = s + self.s3
+                    bt = t + self.t3
+                    bj = bl + bs
+                    if bj == self.bj:
+                      self.qnalpha.append({"alpha":alpha, "alpha_12":alpha_12,
+                                            "l":l,"lam":lam, "bl":bl,
+                                            "s":s, "s3":self.s3, "bs":bs,
+                                            "j":j, "j3":j3, "bj":bj,
+                                            "t":t, "t3":self.t3, "bt":bt
+                                          })
+                      alpha+=1
+                
+                alpha_12 += 1
 
 
         # array for bl, bs
@@ -286,6 +306,9 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         if self.verbose:
           print("Duration of alpha list construction: ", end-start)
 
+        
+        # print partial wave channels
+        self.print_channels()
         
 
         # split time measurements in several pieces to find relevant loops 
@@ -313,6 +336,16 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         self.fadpreptime=0
         self.fadsolvetime=0
         self.numiter=0
+
+    def print_channels(self):
+      '''Print partial wave channels'''
+      # print states used
+      alpha_keys = list(self.qnalpha[0].keys())
+      print("three-body quantum numbers:")
+      print("{0:>10s}  {1:>6s} {2:>6s} {3:>6s} {4:>6s} {5:>6s} {6:>6s} {7:>6s} {8:>6s} {9:>6s} {10:>6s} {11:>6s} {12:>6s} {13:>6s}".format(*alpha_keys))
+      for qnset in self.qnalpha:
+        alpha_vals = list(qnset.values())
+        print("{0}    {1}   {2}   {3}   {4}   {5}   {6}   {7}   {8}   {9}   {10}   {11}   {12}   {13}".format(*alpha_vals))
 
         
     def _angle(self,px,py,pz):
@@ -433,30 +466,35 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         # the smallest index for storage 
         self.timeclebsch-=timeit.default_timer()
 
-        cg=np.zeros((self.nalpha,2*self.blmax+1),dtype=np.double)
-        cgp=np.zeros((self.nalpha,2*self.lmax+1,2*self.blmax+1),dtype=np.double)
+        cg=np.zeros((self.nalpha,self.blmax+1, 2*self.blmax+1),dtype=np.double)
+        cgp=np.zeros((self.nalpha,self.blmax+1,2*self.blmax+1, 2*self.lmax+1),dtype=np.double)
 
         for blbs in self.blbs_list:
           bl = blbs["bl"]
           for qnset in self.qnalpha:
             alpha=qnset["alpha"]
+            bl_alpha = qnset["bl"]
 
           # make array for each bl over here
           # cg_bl = np.zeros(2*bl+1,dtype=np.double)
           # cgp_bl = np.zeros((2*self.lmax+1, 2*bl+1),dtype=np.double)
+          if bl == bl_alpha:
             for bm in range(-bl,bl+1):
               # cg_bl[bm+bl]=float(CG(qnset["l"],bm,qnset["lam"],0,bl,bm).doit())
-              cg[qnset["alpha"],bm+bl]=float(CG(qnset["l"],bm,qnset["lam"],0,bl,bm).doit())
+              # print(qnset["l"],bm,qnset["lam"],0,bl,bm, float(CG(qnset["l"],bm,qnset["lam"],0,bl,bm).doit()))
+              cg[qnset["alpha"],bl, bm+bl]=float(CG(qnset["l"],bm,qnset["lam"],0,bl,bm).doit())
               for mu in range(-qnset["l"],qnset["l"]+1):
+                # print(qnset["l"],mu,qnset["lam"],bm-mu,bl,bm, float(CG(qnset["l"],mu,qnset["lam"],bm-mu,bl,bm).doit()))
                 # cgp_bl[mu+qnset["l"],bm+bl] = float(CG(qnset["l"],mu,qnset["lam"],bm-mu,bl,bm).doit())
-                cgp[qnset["alpha"],mu+qnset["l"],bm+bl]=float(CG(qnset["l"],mu,qnset["lam"],bm-mu,bl,bm).doit())
+                cgp[qnset["alpha"],bl,bm+bl,mu+qnset["l"]]=float(CG(qnset["l"],mu,qnset["lam"],bm-mu,bl,bm).doit())
         
+        # print("cg, cgp nonzero ", np.nonzero(cg), np.nonzero(cgp))
         self.timeclebsch+=timeit.default_timer()
 
         # now we can perform the mu summation for the combination of coupled spherical harmonics 
         self.timeylylam-=timeit.default_timer()
 
-        ylylam=np.zeros((self.nalpha,2*self.blmax+1,self.nqpoints,self.nqpoints,self.nx),dtype=np.double)
+        ylylam=np.zeros((self.nalpha,self.blmax+1,2*self.blmax+1,self.nqpoints,self.nqpoints,self.nx),dtype=np.double)
         for blbs in self.blbs_list:
           bl=blbs["bl"]
           for qnset in self.qnalpha:  # go through allowed l,lam combinations
@@ -469,83 +507,131 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
               j3=qnset["j3"]
               t=qnset["t"]
               t3=qnset["t3"]
-              # bl=qnset["bl"]
+              bl_alpha=qnset["bl"]
               # print(l,s,j,t)
-              for bm in range(-bl,bl+1):
-                  for mu in range(-l,l+1):
-                    lmindx=self._lmindx(l,mu)
-                    if abs(bm-mu)<=lam:
-                      lamindx=self._lmindx(lam,bm-mu)
-                      ylylam[alphap,bm+bl,:,:,:]+=cgp[alphap,mu+l,bm+bl]*yl[lmindx,s,j,t,:,:,:]*ylam[lamindx,s,j,t,:]
-        
+              if bl == bl_alpha:
+                for bm in range(-bl,bl+1):
+                    for mu in range(-l,l+1):
+                      lmindx=self._lmindx(l,mu)
+                      if abs(bm-mu)<=lam:
+                        lamindx=self._lmindx(lam,bm-mu)
+                        ylylam[alphap,bl,bm+bl,:,:,:]+=cgp[alphap,bl,bm+bl,mu+l]*yl[lmindx,s,j,t,:,:,:]*ylam[lamindx,s,j,t,:]
+        # print("ylylam, ylylamp nonzero ", np.nonzero(ylylam))
         self.timeylylam+=timeit.default_timer()
 
         self.timegcalc-=timeit.default_timer()
 
+
+        # evaluate G wiht L first then afterwards perform summation over L and S
         gfunc_bl=np.zeros((self.nalpha,self.nalpha,self.blmax+1,self.nqpoints,self.nqpoints,self.nx),dtype=np.double)
 
-        for blbs in self.blbs_list:
-          bl = blbs["bl"]
-          bs = blbs["bs"]
-          for qnset in self.qnalpha:  # go through allowed l,lam combinations
+
+        # gfunc=np.zeros((self.nalpha,self.nalpha,self.nqpoints,self.nqpoints,self.nx),dtype=np.double)
+        for qnset in self.qnalpha:  # go through allowed l,lam combinations
+          alpha=qnset["alpha"]
+          l=qnset["l"]
+          lam=qnset["lam"]
+          bl = qnset["bl"]
+          s=qnset["s"]
+          s3 = qnset["s3"]
+          j=qnset["j"]
+          j3=qnset["j3"]
+          t=qnset["t"]
+          t3=qnset["t3"]
+          for qnsetp in self.qnalpha:  # go through allowed l,lam combinations
+            alphap=qnsetp["alpha"]
+            for bm in range(-bl,bl+1):
+              if(abs(bm)<=l):  
+                lmindx=self._lmindx(l,bm) 
+                # print(lmindx)
+                # print(gfunc_bl[alpha,alphap,bl,:,:,:].shape)
+                # print(ystarl[lmindx,:,:,:].shape)
+                # print(ylylam[alphap,bl,bm+bl,:,:,:].shape)
+                # print(cg[alpha,bl,bm+ bl].shape)
+                gfunc_bl[alpha,alphap,bl,:,:,:]=8*m.pi**2*np.sqrt((2*lam+1)/(4*m.pi))/(2*bl+1) \
+                   *ystarl[lmindx,s,j,t,:,:,:]*ylylam[alphap,bl,bm+bl,:,:,:]*cg[alpha,bl,bm+ bl]
+
+        # now sum over all L, S
+        gfunc=np.zeros((self.nalpha,self.nalpha,self.nqpoints,self.nqpoints,self.nx),dtype=np.double)
 
 
-              alpha=qnset["alpha"]
-              l=qnset["l"]
-              lam=qnset["lam"]
-              s=qnset["s"]
-              s3 = qnset["s3"]
-              j=qnset["j"]
-              j3=qnset["j3"]
-              t=qnset["t"]
-              t3=qnset["t3"]
-              bj=qnset["bj"]
-              bt=qnset["bt"]
+        for qnset in self.qnalpha:  # go through allowed l,lam combinations
+          alpha=qnset["alpha"]
+          l=qnset["l"]
+          lam=qnset["lam"]
+          s=qnset["s"]
+          s3 = qnset["s3"]
+          j=qnset["j"]
+          j3=qnset["j3"]
+          t=qnset["t"]
+          t3=qnset["t3"]
+          bj=qnset["bj"]
+          bt=qnset["bt"]
+          bl_alpha = qnset["bl"]
+          bs_alpha = qnset["bs"]
 
-              for qnsetp in self.qnalpha:  # go through allowed l,lam combinations
+          for qnsetp in self.qnalpha:  # go through allowed l,lam combinations
 
-                  # not sure how this prime stuff works here
-                  alphap=qnsetp["alpha"]
-                  lp = qnsetp["l"]
-                  lamp = qnsetp["lam"]
-                  sp = qnsetp["s"]
-                  s3p = s3
-                  jp = qnsetp["j"]
-                  j3p = qnsetp["j3"]
-                  tp= qnsetp["t"]
-                  t3 = qnsetp["t3"]
-                
-#                   if (j3 == j3p and t3 == t3p):
+            # not sure how this prime stuff works here
+            alphap=qnsetp["alpha"]
+            lp = qnsetp["l"]
+            lamp = qnsetp["lam"]
+            sp = qnsetp["s"]
+            s3p = s3
+            jp = qnsetp["j"]
+            j3p = qnsetp["j3"]
+            tp= qnsetp["t"]
+            t3 = qnsetp["t3"]
+            bl_alphap = qnsetp["bl"]
+            bs_alphap = qnsetp["bs"]
+            btp = qnsetp["bt"]
+          
+            if (bt == btp and bl_alpha == bl_alphap and bs_alpha == bs_alphap):
 
-                  # evaluate wigner 9j symbol
-                  c9j = float(Wigner9j(l, s, j, lam, s3, j3, bl, bs, bj).doit())
-                  c9jp = float(Wigner9j(lp, sp, jp, lamp, s3, j3p, bl, bs, bj).doit())
 
-                    # evaluate coefficients before that 
-                  coeff = (2*bs + 1) * np.sqrt((2*j+1) * (2*jp+1) * (2*j3+1) + (2*j3p + 1))
+              for blbs in self.blbs_list:
+                  bl = blbs["bl"]
+                  bs = blbs["bs"]
 
-                  # evaluate spin component -> Wigner 6j symnbols
-                  c6j_s = float(Wigner6j(s3, 0.5, sp, s3, bs, s).doit())
-                  spin_part = (-1)**s * np.sqrt((2*s + 1) * (2*sp + 1)) * c6j_s
+                  if (bl == bl_alpha and bs == bs_alpha):   
+                    # print("unprimed states: ", l, s, j, lam, s3, j3, bl, bs, bj)
+                    # print("primed states: ", lp, sp, jp, lamp, s3, j3p, bl, bs, bj)
+                    # evaluate wigner 9j symbol
+                    c9j = float(Wigner9j(l, s, j, lam, s3, j3, bl, bs, bj).doit())
+                    c9jp = float(Wigner9j(lp, sp, jp, lamp, s3, j3p, bl, bs, bj).doit())
 
-                  # include isospin
-                  c6j_t = float(Wigner6j(t3, 0.5, tp, t3, bt, t).doit())
-                  isospin_part = (-1)**t * np.sqrt((2*t + 1) * (2*tp + 1)) * c6j_t
+                      # evaluate coefficients before that 
+                    coeff = (2*bs + 1) * np.sqrt((2*j+1) * (2*jp+1) * (2*j3+1) + (2*j3p + 1))
 
-                  
+                    # evaluate spin component -> Wigner 6j symnbols
+                    c6j_s = float(Wigner6j(s3, 0.5, sp, s3, bs, s).doit())
+                    spin_part = (-1)**s * np.sqrt((2*s + 1) * (2*sp + 1)) * c6j_s
 
-                  for bm in range(-bl,bl+1):
-                      if(abs(bm)<=l):  
-                          lmindx=self._lmindx(l,bm) 
-                          orbital_part = 8*m.pi**2*np.sqrt((2*lam+1)/(4*m.pi))/(2*bl+1) \
-                              *ystarl[lmindx,s,j,t,:,:,:]*ylylam[alphap,bm+bl,:,:,:]*cg[alphap,bm+bl]
-          #                 print(bm+bl)
-          #                 print(np.nonzero(ylylam[alphap,bm+bl,:,:,:]))
+                    # include isospin
+                    c6j_t = float(Wigner6j(t3, 0.5, tp, t3, bt, t).doit())
+                    isospin_part = (-1)**t * np.sqrt((2*t + 1) * (2*tp + 1)) * c6j_t
 
-                          gfunc_bl[alpha, alphap, bl, :,:,:] += coeff * c9j * c9jp * spin_part * isospin_part * orbital_part
+                    # print(c9j, c9jp, c6j_s, c6j_t)
 
-        gfunc = np.sum(gfunc_bl, axis=2)  # sum over all L, s combinations
+                    factor = c9j * c9jp * coeff * spin_part * isospin_part
 
+                    gfunc_bl[alpha,alphap,bl,:,:,:] *= factor
+
+              gfunc[alpha, alphap, :, :, :] = self.bsmax * np.sum(gfunc_bl[alpha,alphap,:,:,:,:], axis=0)
+
+              #         for bm in range(-bl,bl+1):
+              #             if(abs(bm)<=l):  
+              #                 lmindx=self._lmindx(l,bm) 
+              #                 orbital_part = 8*m.pi**2*np.sqrt((2*lam+1)/(4*m.pi))/(2*bl+1) \
+              #                     *ystarl[lmindx,s,j,t,:,:,:]*ylylam[alphap,bl,bm+bl,:,:,:]*cg[alphap,bl,bm+bl]
+              # #                 print(bm+bl)
+              #                 print(np.nonzero(ylylam[alphap,bl,bm+bl,:,:,:]))
+
+              #                 gfunc_bl[alpha, alphap, bl, :,:,:] += coeff * c9j * c9jp * spin_part * isospin_part * orbital_part
+
+      
+        # print(gfunc.shape)
+        # print("gfunc nonzero", np.nonzero(gfunc))
         
         self.timegcalc+=timeit.default_timer()
         #  now we assume that there is a function on p on the left defined by p**l and on the right devided by p'**l' 
@@ -637,13 +723,14 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         self.kfadmat=np.zeros(self.pmat.shape,dtype=np.double)
         
         for qnset in self.qnalpha:
+            alpha12=qnset["alpha_12"]
             alpha=qnset["alpha"]
             for iq in range(self.nqpoints):
                 for ip in range(self.npoints):
                   indxkmat=ip+self.npoints*iq+self.npoints*self.nqpoints*alpha
                   for jp in range(self.npoints):
                     indxpmat=jp+self.npoints*iq+self.npoints*self.nqpoints*alpha
-                    self.kfadmat[indxkmat,:]+=self.tmat[alpha,iq,ip,jp]*2*self.pmat[indxpmat,:]
+                    self.kfadmat[indxkmat,:]+=self.tmat[alpha12,iq,ip,jp]*2*self.pmat[indxpmat,:]
     
         # now multiply with G0
         
@@ -679,7 +766,8 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
     # determine eigenvalues using numpy's eig method    
       start=timeit.default_timer()    
       evalue,evec=np.linalg.eig(self.kfadmat)
-      print("evalue evaluation: ", timeit.default_timer() - start)
+      if self.verbose:
+        print("evalue evaluation: ", timeit.default_timer() - start)
     
     # I now assume that the relevant eigenvalues are real to avoid complex arithmetic 
       evalue=np.real(evalue)
@@ -710,7 +798,8 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
       fadcomp=fadcomp.reshape((self.nalpha,self.nqpoints,self.npoints))     
       norm+=self.skalp(fadcomp,fadcomp)  
       norm*=3.0
-      print("norm evaluation: ", timeit.default_timer() - start)
+      if self.verbose:
+        print("norm evaluation: ", timeit.default_timer() - start)
         
       fadcomp=(1/np.sqrt(norm))*fadcomp
     
@@ -734,6 +823,7 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         # determine eigenvalues for starting energies        
         eta1,fadcomp=self.eigv(e1,neigv)
         eta2,fadcomp=self.eigv(e2,neigv)
+        print("eta1, eta2 for starting energies: ", eta1, eta2)
         niter=0
         
         start = timeit.default_timer()
@@ -749,8 +839,9 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
           e1=enew
           eta1=eta 
             
-          if self.verbose:
-              print("e1, e2, eta: ", e1, e2, eta)
+          # if self.verbose:
+          print("Enew=", e1)
+          print("eta_new=", eta)
 
           # break if loop is taking too long
           niter+=1
@@ -833,19 +924,6 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
       # constructing the identity matrix element between the spline functions
       idmatsingle=np.einsum("ijkmo,lmnjo->ijklmn",splalpha,splalphap)
       idmat=idmatsingle.reshape((self.npoints*self.nqpoints*self.nalpha,self.npoints*self.nqpoints*self.nalpha))
-      
-      # also generate views with separated indices 
-      #pmatsingle=pmat.reshape((self.nalpha,self.nqpoints,self.npoints,self.nalpha,self.nqpoints,self.npoints))
-      
-      #splalphapsingle=splalphap.reshape((self.nalpha,self.nqpoints,self.npoints,self.nqpoints,self.nx))
-      #splalphasingle=splalpha.reshape((self.nalpha,self.nqpoints,self.npoints,self.nqpoints,self.nx))
-      
-      # ijk : alpha iq ip (indxpmat)
-      # lmn : alphap jq jp (indxpmatp)
-      # o   : ix 
-      
-      # pmatsingle=np.einsum("ijkmo,iljmo,lmnjo->ijklmn",splalpha,gfunc,splalphap)
-      # pmat=pmatsingle.reshape((self.npoints*self.nqpoints*self.nalpha,self.npoints*self.nqpoints*self.nalpha))
 
       # for qnset in self.qnalpha:  # go through allowed l,lam combinations
       #   alpha=qnset["alpha"]
@@ -869,20 +947,24 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
       # now perform summation over one index
       for qnset in self.qnalpha:  # go through allowed l,lam combinations
         alpha=qnset["alpha"]
-        for qnsetp in self.qnalpha:  # go through allowed l,lam combinations
-          alphap=qnsetp["alpha"]
-          for ip in range(self.npoints): 
-            for iq in range(self.nqpoints):
-              indxidmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
-            
-              wf[indxidmat] = np.dot((idmat[indxidmat,:] + alpha*self.pmat[indxidmat,:]), fadcomp)
+        for ip in range(self.npoints): 
+          for iq in range(self.nqpoints):
+            indxidmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
+          
+            wf[indxidmat] = np.dot((idmat[indxidmat,:] + alpha*self.pmat[indxidmat,:]), fadcomp)
 #       wf = np.einsum("ij,j->i", idmat + alpha * self.pmat, fadcomp)
-      print(wf.shape)
+      # print(wf.shape)
 
       wf = wf.reshape((self.nalpha,self.nqpoints,self.npoints))
 
+      # normalize the wavefunction
+      wf = (1 / np.sqrt(self.skalp(wf, wf))) * wf
+
+
+      
+
       return wf
-    
+
 #     def wavefunc(self, fadcomp):
 #         '''Wavefunction evaluated from Faddeev component'''
         
@@ -909,6 +991,9 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         h0 = 3 * np.sum(wf * Tmat * fadout)
         
         return h0
+
+
+
 # set up set of equations and calculate eigenvalues iteratively 
 
     def eigv_iter(self,E,neigv, maxiter=10, eigtol=1e-6):
