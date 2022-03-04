@@ -945,14 +945,14 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
       fadcomp=fadcomp.reshape((self.nalpha*self.nqpoints*self.npoints))   
 
       # now perform summation over one index
-      for qnset in self.qnalpha:  # go through allowed l,lam combinations
-        alpha=qnset["alpha"]
-        for ip in range(self.npoints): 
-          for iq in range(self.nqpoints):
-            indxidmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
+      # for qnset in self.qnalpha:  # go through allowed l,lam combinations
+      #   alpha=qnset["alpha"]
+      #   for ip in range(self.npoints): 
+      #     for iq in range(self.nqpoints):
+      #       indxidmat=self.npoints*self.nqpoints*alpha+self.npoints*iq+ip
           
-            wf[indxidmat] = np.dot((idmat[indxidmat,:] + alpha*self.pmat[indxidmat,:]), fadcomp)
-#       wf = np.einsum("ij,j->i", idmat + alpha * self.pmat, fadcomp)
+      #       wf[indxidmat] = np.dot((idmat[indxidmat,:] + alpha*self.pmat[indxidmat,:]), fadcomp)
+      wf = np.einsum("ij,j->i", idmat + alpha * self.pmat, fadcomp)
       # print(wf.shape)
 
       wf = wf.reshape((self.nalpha,self.nqpoints,self.npoints))
@@ -988,9 +988,10 @@ class ThreeBodyFerm(TwoBodyTMatFerm):
         # now evaluate the expectation value
         # this means the sum
         # multiply by 3 due to normalization
-        h0 = 3 * np.sum(wf * Tmat * fadout)
+        h0_fad = 3 * np.sum(wf * Tmat * fadout)
+        h0 = np.sum(wf**2*Tmat)
         
-        return h0
+        return h0, h0_fad
 
 
 
